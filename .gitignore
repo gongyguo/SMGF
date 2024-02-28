@@ -1,0 +1,5 @@
+test*
+data/
+__pycache__/
+bash.sh
+data.zip
