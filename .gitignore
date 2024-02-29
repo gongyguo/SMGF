@@ -3,3 +3,5 @@ data/
 __pycache__/
 bash.sh
 data.zip
+SMGF_data_upload.zip
+SMGF_jac.py
