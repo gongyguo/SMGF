@@ -8,13 +8,10 @@ from spectral import discretize
 from evaluate import clustering_metrics
 from dataset_simple import load_data
 from scipy.optimize import minimize
-from embedding import netmf
-from sketchne_graph import sketchne_graph
 import argparse
 from sklearn.cluster import KMeans
 from evaluate import ovr_evaluate
 from sparse_dot_mkl import dot_product_mkl
-import random
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn import linear_model
 
@@ -142,8 +139,10 @@ def SMGF_OPT(dataset):
     if config.embedding:
         delta=sp.eye(dataset['n'])-mv_lap(sp.eye(dataset['n']))
         if config.approx_knn:
+            from sketchne_graph import sketchne_graph
             emb = sketchne_graph(delta, dim = config.embed_dim, spec_propagation=False, window_size=30, eta1=32, eta2=32, eig_rank=256, power_iteration=20)
         else:
+            from embedding import netmf
             emb = netmf(delta, dim = config.embed_dim)
         embed_time = time.time() - start_time
         peak_memory_MBs = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
