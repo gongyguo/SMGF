@@ -16,7 +16,7 @@ from sklearn import linear_model
 
 def parse_args():
     p = argparse.ArgumentParser(description='Set parameter')
-    p.add_argument('--dataset', type=str, default='acm', help='dataset name (e.g.: acm, dblp, imdb)')
+    p.add_argument('--dataset', type=str, default='dblp', help='dataset name (e.g.: acm, dblp, imdb)')
     p.add_argument('--embedding', action='store_true', help='run embedding task')
     p.add_argument('--verbose', action='store_true', help='print verbose logs')
     p.add_argument('--knn_k', type=int, default=10, help='k neighbors except imdb=500, yelp=200' )

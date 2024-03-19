@@ -10,17 +10,24 @@ Unzip the content of "data/data.zip" into "data" folder.
 
 ## Usage
 
-Available datasets: ACM, DBLP, IMDB, Freebase, RM, Yelp, Amazon-computers, Amazon-photos, MAG-phy, MAG-eng.
+**10 available datasets as follows**: 
 
-### Embedding
+6 muliplex datasets: acm,dblp,imdb,yelp,freebase,rm
 
-```bash
-python SMGF.py --dataset dataset_name --embedding
-```
+4 graph datasets with mulipile features: amazon-photos,amazon-computers,magphy,mageng.
 
-### Clustering
+**2 Spectrum-guided functions for multi-view graph learning**:
 
-```bash
-python SMGF.py --dataset dataset_name
-```
+SMGF-LA directly optimizes the objective with a derivative-free iterative method. Alternatively, SMGF-PI finds a surrogate objective via quadratic regression for
+efficient optimization. Please choose the one you want to use.
 
+Parameters used:
+
+| Parameter   | Default | Description                                             |
+| ----------- | ------- | ------------------------------------------------------- |
+| --dataset   | dblp    | chooese used dataset                                    |
+| --knn_k     | 10      | $K$, the size of neighborhood in KNN graph              |
+| --embedding | -       | configure for generate embedding, default is clustering |
+| --verbose   | -       | Produce verbose command-line output                     |
+
+See in [command.sh](command.sh) for details
