@@ -7,9 +7,8 @@ import scipy.sparse.linalg as sla
 from spectral import discretize
 from evaluate import clustering_metrics
 from dataset_simple import load_data
-from scipy.optimize import minimize
+from scipy.optimize import fmin_cobyla
 import argparse
-from sklearn.cluster import KMeans
 from evaluate import ovr_evaluate
 from sparse_dot_mkl import dot_product_mkl
 from sklearn.preprocessing import PolynomialFeatures
@@ -20,7 +19,7 @@ def parse_args():
     p.add_argument('--dataset', type=str, default='acm', help='dataset name (e.g.: acm, dblp, imdb)')
     p.add_argument('--embedding', action='store_true', help='run embedding task')
     p.add_argument('--verbose', action='store_true', help='print verbose logs')
-    p.add_argument('--knn_k', type=int, default=10, help='k neighbors')
+    p.add_argument('--knn_k', type=int, default=10, help='k neighbors except imdb=500, yelp=200' )
     args = p.parse_args()
     config.dataset = args.dataset
     config.verbose = args.verbose
@@ -28,7 +27,7 @@ def parse_args():
     config.knn_k = args.knn_k
     return args
 
-def SMGF_OPT(dataset):
+def SMGF_PI(dataset):
     num_clusters = dataset['k']
     n = dataset['n']
     nv = dataset['nv']
@@ -71,12 +70,13 @@ def SMGF_OPT(dataset):
     
     sample_obj=[]
     sample_node = []
-    fix_weight = config.sample_weight
-    sample_node += [np.array([(1-fix_weight)/(nv-1) if i != j else fix_weight for j in range(nv)]) for i in range(nv)]
-    fix_weight = 1 - (nv-1)*config.sample_weight
-    sample_node.append(view_weights)
-    if config.dataset == "yelp":
-        sample_node += [np.array([(1-fix_weight)/(nv-1) if i != j else fix_weight for j in range(nv)]) for i in range(nv)]
+    center_point = np.full(nv, 1.0/nv)
+    sample_node.append(center_point)
+    for i in range(nv):
+        vertex_point = np.zeros_like(center_point)
+        vertex_point[i] = 1.0
+        vector = vertex_point - center_point
+        sample_node.append(center_point + config.step_length*vector)
 
     def mv_lap(mat):
         if config.approx_knn:
@@ -99,13 +99,12 @@ def SMGF_OPT(dataset):
         obj = eig_val[num_clusters-1] / eig_val[num_clusters] - config.obj_alpha*eig_val[1]
         sample_obj.append(obj)
 
-
     x = np.asarray(sample_node)[:,:-1]
     y = np.asarray(sample_obj)
     poly_reg =PolynomialFeatures(degree=config.poly_degree) 
     X_ploy =poly_reg.fit_transform(x)
     time1=time.time()
-    lin_reg_2=linear_model.Ridge(alpha=config.ridge_alpha)
+    lin_reg_2=linear_model.Ridge(alpha=config.ridge_alpha, fit_intercept=False)
     lin_reg_2.fit(X_ploy,y)
     if config.verbose:
         print(f"linear construct:{time.time()-time1}")
@@ -113,7 +112,7 @@ def SMGF_OPT(dataset):
         print("coefficients", lin_reg_2.coef_)
         print("intercept", lin_reg_2.intercept_)
     
-    w_constraint = [{'type': 'ineq', 'fun': lambda w: 1.0 - np.sum(w) - config.weight_lb}, {'type': 'ineq', 'fun': lambda w: min(w)-config.weight_lb}, {'type': 'ineq', 'fun': lambda w: 1.0-(nv-1)*config.weight_lb-max(w)}]
+    w_constraint = [lambda w: 1.0 - np.sum(w) - config.weight_lb, lambda w: w-config.weight_lb]
     
     def objective_function(w):
         view_weights[:-1] = w
@@ -121,15 +120,15 @@ def SMGF_OPT(dataset):
         return lin_reg_2.predict(poly_reg.fit_transform(np.asarray(view_weights[:-1]).reshape(1,-1))) + config.obj_regular*np.power(np.asarray(view_weights),2).sum()
     
     opt_time=time.time()
-    opt_w = minimize(objective_function, np.full((nv-1), 1.0/nv),method = "COBYLA", tol=config.opt_w_tol,constraints=w_constraint,options={'maxiter': 1000, 'rhobeg': config.opt_cobyla_rhobeg, 'disp': config.verbose})
+    opt_w = fmin_cobyla(objective_function, np.full((nv-1), 1.0/nv), w_constraint, rhoend=config.opt_w_tol, maxfun=1000, rhobeg=config.opt_cobyla_rhobeg, catol=0.0000001, disp=3 if config.verbose else 0)
     if config.verbose:
         print(f"cobyla optimize{time.time()-opt_time}")
-    view_weights[:-1] = opt_w.x
-    view_weights[-1] = 1.0 - np.sum(opt_w.x)
+    view_weights[:-1] = opt_w
+    view_weights[-1] = 1.0 - np.sum(opt_w)
     lapLO = sla.LinearOperator((n, n), matvec=mv_lap)
 
     try:
-        eig_val, eig_vec = sla.eigsh(lapLO, num_clusters+1, which='SM', tol=config.sc_eig_tol, maxiter=1000)
+        eig_val, eig_vec = sla.eigsh(lapLO, num_clusters+2, which='SM', tol=config.sc_eig_tol, maxiter=1000)
         eig_val.sort()
     except sla.ArpackError as e:
         eig_val, eig_vec = e.eigenvalues, e.eigenvectors
@@ -149,10 +148,7 @@ def SMGF_OPT(dataset):
         ovr_evaluate(emb, dataset['labels'])
         print(f"Time: {embed_time:.3f}s RAM: {int(peak_memory_MBs)}MB Weights: {', '.join([f'{w:.2f}' for w in view_weights])}")
     else:
-        if config.kmeans:
-            predict_clusters = KMeans(n_clusters=num_clusters).fit_predict(eig_vec[:, :num_clusters])
-        else:
-            predict_clusters, _ = discretize(eig_vec[:, :num_clusters])
+        predict_clusters, _ = discretize(eig_vec[:, :num_clusters])
         cluster_time = time.time() - start_time
         peak_memory_MBs = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
         cm = clustering_metrics(dataset['labels'], predict_clusters)
@@ -164,5 +160,5 @@ if __name__ == '__main__':
     dataset = load_data(config.dataset)
     if config.dataset.startswith("mag"):
         config.approx_knn = True
-    SMGF_OPT(dataset)
+    SMGF_PI(dataset)
 

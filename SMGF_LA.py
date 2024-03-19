@@ -9,7 +9,6 @@ from evaluate import clustering_metrics
 from dataset_simple import load_data
 from scipy.optimize import minimize
 import argparse
-from sklearn.cluster import KMeans
 from evaluate import ovr_evaluate
 from sparse_dot_mkl import dot_product_mkl
 
@@ -18,7 +17,7 @@ def parse_args():
     p.add_argument('--dataset', type=str, default='acm', help='dataset name (e.g.: acm, dblp, imdb)')
     p.add_argument('--embedding', action='store_true', help='run embedding task')
     p.add_argument('--verbose', action='store_true', help='print verbose logs')
-    p.add_argument('--knn_k', type=int, default=10, help='k neighbors')
+    p.add_argument('--knn_k', type=int, default=10, help='k neighbors except imdb=500, yelp=200' )
     args = p.parse_args()
     config.dataset = args.dataset
     config.verbose = args.verbose
@@ -26,7 +25,7 @@ def parse_args():
     config.knn_k = args.knn_k
     return args
 
-def SMGF(dataset):
+def SMGF_LA(dataset):
     num_clusters = dataset['k']
     n = dataset['n']
     nv = dataset['nv']
@@ -36,8 +35,7 @@ def SMGF(dataset):
     start_time = time.time()
     knn_adjs = []
 
-    for X in features:
-        
+    for X in features:    
         import faiss
         if sp.issparse(X):
             X=X.astype(np.float32).tocoo()
@@ -122,10 +120,7 @@ def SMGF(dataset):
         emb_results = ovr_evaluate(emb, dataset['labels'])
         print(f"Time: {embed_time:.3f}s RAM: {int(peak_memory_MBs)}MB Weights: {', '.join([f'{w:.2f}' for w in view_weights])}")
     else:
-        if config.kmeans:
-            predict_clusters = KMeans(n_clusters=num_clusters).fit_predict(eig_vec[:, :num_clusters])
-        else:
-            predict_clusters, _ = discretize(eig_vec[:, :num_clusters])
+        predict_clusters, _ = discretize(eig_vec[:, :num_clusters])
         cluster_time = time.time() - start_time
         peak_memory_MBs = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
         cm = clustering_metrics(dataset['labels'], predict_clusters)
@@ -142,6 +137,6 @@ if __name__ == '__main__':
     dataset = load_data(config.dataset)
     if config.dataset.startswith("mag"):
         config.approx_knn = True
-    SMGF(dataset)
+    SMGF_LA(dataset)
 
 

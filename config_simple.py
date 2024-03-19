@@ -19,6 +19,6 @@ poly_degree = 2  #polynomial feature degree
 seed = 0 #random seed
 ridge_alpha = 0.05 #ridge linear regression
 embed_dim = 64 # embedding demension
-sample_weight=0.1 #sample weight for OPT funciton
+step_length = 0.5 #sample weight for OPT funciton
 approx_knn = False # large-scale approx knn config
 verbose = False

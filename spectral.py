@@ -1,8 +1,8 @@
 import numpy as np
 from sklearn.utils import check_random_state, as_float_array
+from scipy.stats import special_ortho_group
 
-
-def discretize(vectors, copy=True, max_svd_restarts=3, n_iter_max=50,
+def discretize(vectors, copy=True, max_svd_restarts=3, n_iter_max=50, num_init=3, 
                random_state=None):
 
     from scipy.sparse import csc_matrix, csr_matrix
@@ -28,10 +28,33 @@ def discretize(vectors, copy=True, max_svd_restarts=3, n_iter_max=50,
 
     svd_restarts = 0
     has_converged = False
+    init_rotations = []
+    init_ncut_values = []
+    
+    for init in range(num_init):
+        rotation = special_ortho_group.rvs(n_components, random_state=init)
+        t_discrete = np.dot(vectors, rotation)
+        labels = t_discrete.argmax(axis=1)
+        vectors_discrete = csc_matrix(
+            (np.ones(len(labels)), (np.arange(0, n_samples), labels)),
+            shape=(n_samples, n_components)).toarray()
+        vectors_f = vectors_discrete
+        vectors_fs = np.sqrt(vectors_f.sum(axis=0))
+        vectors_fs[vectors_fs==0]=1
+        vectors_f = vectors_f*1.0/vectors_fs
+        t_svd = vectors_f.T.dot(vectors)
+        try:
+            U, S, Vh = np.linalg.svd(t_svd)
+        except LinAlgError:
+            print("SVD did not converge")
+            continue
+        ncut_value = 2.0 * (n_samples - S.sum())
+        init_rotations.append(rotation)
+        init_ncut_values.append(ncut_value)
+
+    rotation = init_rotations[np.argmin(init_ncut_values)]
 
     while (svd_restarts < max_svd_restarts) and not has_converged:
-        rotation = np.identity(n_components)
-
         last_objective_value = 0.0
         n_iter = 0
 

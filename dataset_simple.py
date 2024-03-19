@@ -23,6 +23,7 @@ def encode_onehot(labels):
 
 def load_data(dataset_name):
     dataset = {}
+    # Six multiplex datasets
     if dataset_name == 'acm':
         data = sio.loadmat("./data/acm/ACM3025.mat")
         dataset['graphs'] = [sp.csr_matrix(data['PAP']), sp.csr_matrix(data['PLP'])]
@@ -50,11 +51,9 @@ def load_data(dataset_name):
         dataset['labels'] = data['label']
     elif dataset_name =='rm':
         data = pickle.load(open(f"./data/ftcs/rm.pkl", "rb"))
-        config.opt_w_tol =1e-3
         dataset['graphs'] = data['graphs']
         dataset['features'] = data['features']
         dataset['labels'] = data['labels']
-
     # Amazon datasets consisting of one graph and multiple features
     elif dataset_name in ['amazon-computers', 'amazon-photos']:
         mcgc_file_names = {'amazon-computers': 'amazon_electronics_computers.npz', 'amazon-photos': 'amazon_electronics_photo.npz'}
@@ -63,16 +62,15 @@ def load_data(dataset_name):
         attr_matrix = sp.csr_matrix((data['attr_data'], data['attr_indices'], data['attr_indptr']), shape=data['attr_shape']).toarray()
         dataset['features'] = [attr_matrix,attr_matrix@attr_matrix.T]
         dataset['labels'] = data['labels']
-    
+    # MAG datasets consisting of multiple graphs and features
     elif dataset_name in ['magphy','mageng']:
-        data = pickle.load(open(f"./data/scale/{dataset_name}.pkl", "rb"))
-        # dataset['hypergraphs'] = [data['AP']]
+        data = pickle.load(open(f"./data/scale/new_{dataset_name}.pkl", "rb"))
         dataset['graphs'] = [data['PP'], data['AP'].T@data['AP']]
-        dataset['features'] = [data['features']]
+        dataset['features'] = [data['features'],data['features1']]
         dataset['labels'] = data['labels']
-            
     else:
         raise Exception('Invalid dataset name')
+
     # data cleanup
     dataset['n'] = []
     for i in range(len(dataset['graphs'])):
